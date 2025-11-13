@@ -27,17 +27,41 @@ setup(
     ],
     python_requires=">=3.8",
     install_requires=[
-        "openai>=1.0.0",
         "click>=8.0.0",
         "pydantic>=2.0.0",
         "jinja2>=3.0.0",
     ],
     extras_require={
+        # LLM providers (choose one or more)
+        "openai": [
+            "openai>=1.0.0",
+        ],
+        "anthropic": [
+            "anthropic>=0.28.0",
+        ],
+        "llms": [
+            "openai>=1.0.0",
+            "anthropic>=0.28.0",
+        ],
+        # Web search capabilities
+        "search": [
+            "ddgs>=5.0.0",
+        ],
+        # All optional features
+        "all": [
+            "openai>=1.0.0",
+            "anthropic>=0.28.0",
+            "ddgs>=5.0.0",
+        ],
+        # Development dependencies
         "dev": [
             "pytest>=7.0.0",
             "black>=22.0.0",
             "flake8>=5.0.0",
             "mypy>=1.0.0",
+            "openai>=1.0.0",
+            "anthropic>=0.28.0",
+            "ddgs>=5.0.0",
         ],
     },
     entry_points={
