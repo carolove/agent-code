@@ -30,6 +30,9 @@ setup(
         "click>=8.0.0",
         "pydantic>=2.0.0",
         "jinja2>=3.0.0",
+        "httpx>=0.24.0",
+        "requests>=2.28.0",
+        "beautifulsoup4>=4.12.0",
     ],
     extras_require={
         # LLM providers (choose one or more)
@@ -62,6 +65,9 @@ setup(
             "openai>=1.0.0",
             "anthropic>=0.28.0",
             "ddgs>=5.0.0",
+            "httpx>=0.24.0",
+            "requests>=2.28.0",
+            "beautifulsoup4>=4.12.0",
         ],
     },
     entry_points={

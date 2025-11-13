@@ -132,7 +132,7 @@ async def _run_agent(
                 status_icon = "⏳" if task.status.value == "pending" else "✅"
                 click.echo(f"  {status_icon} {task.content} ({task.priority} priority)")
 
-            # Display search results if available
+            # Display search and crawl results if available
             if final_state.context.get("search_results"):
                 click.echo("\n🔍 Web Search Results:")
 
@@ -159,6 +159,35 @@ async def _run_agent(
                     else:
                         click.echo(f"  → No valid results found\n")
 
+                # Display crawl results if available
+                if final_state.context.get("crawl_results") and final_state.context.get("crawl_performed"):
+                    click.echo("\n🕷️  Web Crawl Results:")
+
+                    # Display crawl summary if available
+                    if final_state.context.get("crawl_summary"):
+                        crawl_summary = final_state.context["crawl_summary"]
+                        click.echo(f"\n   📋 Crawl Summary:")
+                        click.echo(f"      - URLs crawled: {crawl_summary['total_urls']}")
+                        click.echo(f"      - Successful: {crawl_summary['successful_crawls']}")
+                        click.echo(f"      - Failed: {crawl_summary['failed_crawls']}")
+                        click.echo(f"      - Total content: {crawl_summary['total_content_size']} bytes")
+                        click.echo(f"      - Source: httpx (async)\n")
+
+                    for crawl_result in final_state.context["crawl_results"]:
+                        if crawl_result['status_code'] == 200:
+                            click.echo(f"  📄 {crawl_result['url']}")
+                            click.echo(f"  → HTTP {crawl_result['status_code']} - {crawl_result['content_length']} bytes")
+                            if crawl_result['title']:
+                                click.echo(f"  → Title: {crawl_result['title']}")
+                            if crawl_result['text'] and len(crawl_result['text']) > 0:
+                                click.echo(f"  → Text preview (first 200 chars):")
+                                preview = crawl_result['text'].replace('\n', ' ')[:200]
+                                click.echo(f"     {preview}...")
+                            click.echo()
+                        else:
+                            click.echo(f"  ❌ {crawl_result['url']}")
+                            click.echo(f"  → Error: {crawl_result['error']}\n")
+
         if final_state.generated_code:
             click.echo("\n💻 Generated Code:")
             click.echo("-" * 50)
@@ -180,6 +209,11 @@ async def _run_agent(
             summary = final_state.context["search_summary"]
             click.echo(f"\n🔍 Web search: {summary['successful_queries']} successful, "
                        f"{summary['total_results']} results found")
+
+            if final_state.context.get("crawl_summary") and final_state.context.get("crawl_performed"):
+                crawl_summary = final_state.context["crawl_summary"]
+                click.echo(f"🕷️  Web crawl: {crawl_summary['successful_crawls']} successful, "
+                           f"{crawl_summary['total_content_size']} bytes fetched")
 
         
     except Exception as e:
