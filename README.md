@@ -1,3 +1,4 @@
+# this is a practise project, don't trust it.
 # Coding Agent
 
 An agentic coding assistant that analyzes requirements, creates todo lists, and generates code using the Agentic Action Loop programming model.
