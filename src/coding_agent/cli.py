@@ -135,22 +135,36 @@ async def _run_agent(
             # Display search results if available
             if final_state.context.get("search_results"):
                 click.echo("\n🔍 Web Search Results:")
+
+                # Display search summary if available
+                if final_state.context.get("search_summary"):
+                    summary = final_state.context["search_summary"]
+                    click.echo(f"\n   📋 Search Summary:")
+                    click.echo(f"      - Queries executed: {summary['total_queries']}")
+                    click.echo(f"      - Successful: {summary['successful_queries']}")
+                    click.echo(f"      - Failed: {summary['failed_queries']}")
+                    click.echo(f"      - Total results: {summary['total_results']}")
+                    click.echo(f"      - Source: DDGS\n")
+
                 for search_entry in final_state.context["search_results"]:
-                    click.echo(f"\n  Query: {search_entry['query']}")
-                    for idx, result in enumerate(search_entry['results'], 1):
-                        if result['source'] != 'error':
-                            click.echo(f"\n    {idx}. {result['title']}")
-                            click.echo(f"       {result['snippet']}")
-                            click.echo(f"       {result['url']}")
-                        else:
-                            click.echo(f"\n    {idx}. Error: {result['snippet']}")
+                    click.echo(f"  Query: {search_entry['query']}")
+                    # Count valid results (excluding errors)
+                    valid_results = [r for r in search_entry['results'] if r['source'] != 'error']
+                    if valid_results:
+                        click.echo(f"  → {len(valid_results)} result(s) found:\n")
+                        for idx, result in enumerate(valid_results, 1):
+                            click.echo(f"    {idx}. {result['title']}")
+                            click.echo(f"       {result['snippet'][:100]}...")
+                            click.echo(f"       URL: {result['url']}\n")
+                    else:
+                        click.echo(f"  → No valid results found\n")
 
         if final_state.generated_code:
             click.echo("\n💻 Generated Code:")
             click.echo("-" * 50)
             click.echo(final_state.generated_code)
             click.echo("-" * 50)
-            
+
             # Save to file if requested
             if output:
                 output_path = Path(output)
@@ -160,6 +174,13 @@ async def _run_agent(
             click.echo("\n❌ No code was generated.")
             if final_state.context.get("error"):
                 click.echo(f"Error: {final_state.context['error']}")
+
+        # Always show a brief summary at the end (even without --verbose)
+        if final_state.context.get("search_summary") and not verbose:
+            summary = final_state.context["search_summary"]
+            click.echo(f"\n🔍 Web search: {summary['successful_queries']} successful, "
+                       f"{summary['total_results']} results found")
+
         
     except Exception as e:
         click.echo(f"\n❌ Error: {str(e)}", err=True)

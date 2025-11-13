@@ -31,8 +31,9 @@ class WebSearchAction(BaseAction):
         if self.search_tool is None:
             try:
                 self.search_tool = WebSearch()
+                click.echo("✅ DDGS search tool initialized successfully")
             except Exception as e:
-                click.echo(f"Warning: Failed to initialize web search: {str(e)}", err=True)
+                click.echo(f"❌ Failed to initialize web search: {str(e)}", err=True)
                 return {
                     "search_performed": False,
                     "search_results": [],
@@ -43,28 +44,70 @@ class WebSearchAction(BaseAction):
         queries = self._generate_search_queries(state)
 
         if not queries:
+            click.echo("ℹ️  No search queries generated")
             return {"search_performed": False, "search_results": []}
+
+        click.echo(f"📊 Will perform {len(queries)} search query(ies)")
 
         # Perform searches
         all_results = []
+        total_results_found = 0
+        successful_queries = 0
+        failed_queries = 0
+
         for query in queries:
-            click.echo(f"🔍 Searching: {query}")
+            click.echo(f"🔍 Searching: '{query}'")
             try:
                 results = await self.search_tool.search(query, max_results=3)
+
+                # Filter out error results
+                valid_results = [r for r in results if r.source != "error"]
+                error_results = [r for r in results if r.source == "error"]
+
+                if error_results:
+                    click.echo(f"   ⚠️  Warning: {error_results[0].snippet}")
+
+                if valid_results:
+                    successful_queries += 1
+                    total_results_found += len(valid_results)
+                    click.echo(f"   ✅ Found {len(valid_results)} result(s)")
+                else:
+                    click.echo(f"   ⚠️  No valid results returned")
+                    failed_queries += 1
+
                 search_entry = {
                     "query": query,
                     "results": [result.to_dict() for result in results]
                 }
                 all_results.append(search_entry)
                 self.search_history.append(search_entry)
+
             except Exception as e:
-                click.echo(f"Warning: Search failed for '{query}': {str(e)}", err=True)
+                click.echo(f"   ❌ Search failed: {str(e)}", err=True)
+                failed_queries += 1
                 continue
+
+        # Print summary
+        click.echo(f"\n{'='*60}")
+        click.echo(f"📋 DDGS SEARCH SUMMARY")
+        click.echo(f"{'='*60}")
+        click.echo(f"Total queries executed: {len(queries)}")
+        click.echo(f"Successful queries: {successful_queries}")
+        click.echo(f"Failed queries: {failed_queries}")
+        click.echo(f"Total results found: {total_results_found}")
+        click.echo(f"Search source: DDGS (ddgs package)")
+        click.echo(f"{'='*60}\n")
 
         return {
             "search_performed": len(all_results) > 0,
             "search_results": all_results,
-            "search_history": self.search_history
+            "search_history": self.search_history,
+            "summary": {
+                "total_queries": len(queries),
+                "successful_queries": successful_queries,
+                "failed_queries": failed_queries,
+                "total_results": total_results_found
+            }
         }
 
     def _generate_search_queries(self, state: AgentState) -> List[str]:

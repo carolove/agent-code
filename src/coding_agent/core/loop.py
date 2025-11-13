@@ -105,6 +105,8 @@ class AgenticLoop:
                 if "search_results" in result:
                     state.context["search_results"] = result["search_results"]
                     state.context["search_performed"] = result.get("search_performed", False)
+                    if "summary" in result:
+                        state.context["search_summary"] = result["summary"]
 
             except Exception as e:
                 # Handle errors gracefully
