@@ -54,7 +54,7 @@ coding-agent --help
 
 ```bash
 export ANTHROPIC_BASE_URL="https://api.kimi.com/coding/"
-export ANTHROPIC_AUTH_TOKEN="sk-kimi-IIGaErmMdBbGJC0upLJrMIpPTimlNrwx9OoMtTEPrniUBsZEF25dhoFzchOyjjtQ"
+export ANTHROPIC_AUTH_TOKEN="sk-kimi-xxxxxxx"
 export ANTHROPIC_MODEL="kimi-for-coding"
 export ANTHROPIC_SMALL_FAST_MODEL="kimi-for-coding"
 ```
