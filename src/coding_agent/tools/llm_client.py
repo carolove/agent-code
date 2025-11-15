@@ -1,7 +1,8 @@
 """LLM client for integrating with language models."""
 
 import os
-from typing import Optional, Dict, Any
+import json
+from typing import Optional, Dict, Any, List, Callable
 
 try:
     from anthropic import AsyncAnthropic
@@ -10,7 +11,7 @@ except ImportError:
 
 
 class AnthropicClient:
-    """Anthropic/Kimi API client wrapper."""
+    """Anthropic/Kimi API client wrapper with tools use support."""
 
     def __init__(
         self,
@@ -50,6 +51,61 @@ class AnthropicClient:
             base_url=self.base_url, api_key=self.auth_token, max_retries=2
         )
 
+        # Tool registry: maps tool name to callable function
+        self.tool_registry: Dict[str, Callable] = {}
+
+        # Tool definitions for API
+        self.tool_definitions: List[Dict[str, Any]] = []
+
+    def register_tool(
+        self,
+        name: str,
+        description: str,
+        parameters: Dict[str, Any],
+        function: Callable,
+    ) -> None:
+        """Register a tool for use with the LLM.
+
+        Args:
+            name: Tool name
+            description: Tool description
+            parameters: JSON schema for tool parameters
+            function: Callable function to execute when tool is called
+        """
+        self.tool_registry[name] = function
+        self.tool_definitions.append({
+            "type": "function",
+            "function": {
+                "name": name,
+                "description": description,
+                "parameters": parameters,
+            }
+        })
+
+    async def _execute_tool(self, tool_name: str, tool_input: Dict[str, Any]) -> Any:
+        """Execute a registered tool.
+
+        Args:
+            tool_name: Name of the tool to execute
+            tool_input: Input parameters for the tool
+
+        Returns:
+            Tool execution result
+        """
+        if tool_name not in self.tool_registry:
+            raise ValueError(f"Tool '{tool_name}' not registered")
+
+        tool_function = self.tool_registry[tool_name]
+
+        # Execute the tool (handle both sync and async functions)
+        import asyncio
+        if asyncio.iscoroutinefunction(tool_function):
+            result = await tool_function(**tool_input)
+        else:
+            result = tool_function(**tool_input)
+
+        return result
+
     async def generate_text(
         self, prompt: str, max_tokens: int = 4000, model: Optional[str] = None
     ) -> str:
@@ -70,6 +126,111 @@ class AnthropicClient:
         )
 
         return message.content[0].text
+
+    async def generate_with_tools(
+        self,
+        messages: List[Dict[str, str]],
+        tools: Optional[List[Dict[str, Any]]] = None,
+        max_tokens: int = 4000,
+        model: Optional[str] = None,
+        max_iterations: int = 5,
+    ) -> Dict[str, Any]:
+        """Generate text with tool use support.
+
+        Args:
+            messages: List of message dictionaries with 'role' and 'content'
+            tools: List of tool definitions (uses registered tools if None)
+            max_tokens: Maximum tokens to generate
+            model: Model to use (defaults to ANTHROPIC_MODEL)
+            max_iterations: Maximum number of tool call iterations
+
+        Returns:
+            Dictionary with 'content' (final text) and 'tool_calls' (list of tool calls made)
+        """
+        model_to_use = model or self.model
+        tools_to_use = tools if tools is not None else self.tool_definitions
+
+        conversation_messages = messages.copy()
+        tool_calls_made = []
+
+        for iteration in range(max_iterations):
+            # Create message with or without tools
+            if tools_to_use:
+                response = await self.client.messages.create(
+                    model=model_to_use,
+                    max_tokens=max_tokens,
+                    messages=conversation_messages,
+                    tools=tools_to_use,
+                )
+            else:
+                response = await self.client.messages.create(
+                    model=model_to_use,
+                    max_tokens=max_tokens,
+                    messages=conversation_messages,
+                )
+
+            # Check if the model wants to use a tool
+            if response.stop_reason == "tool_use":
+                # Process tool calls
+                tool_results = []
+
+                for content_block in response.content:
+                    if content_block.type == "tool_use":
+                        tool_name = content_block.name
+                        tool_input = content_block.input
+                        tool_use_id = content_block.id
+
+                        # Execute the tool
+                        try:
+                            tool_result = await self._execute_tool(tool_name, tool_input)
+                            tool_calls_made.append({
+                                "name": tool_name,
+                                "input": tool_input,
+                                "result": tool_result,
+                            })
+
+                            # Format result for API
+                            tool_results.append({
+                                "type": "tool_result",
+                                "tool_use_id": tool_use_id,
+                                "content": json.dumps(tool_result) if not isinstance(tool_result, str) else tool_result,
+                            })
+                        except Exception as e:
+                            tool_results.append({
+                                "type": "tool_result",
+                                "tool_use_id": tool_use_id,
+                                "content": f"Error executing tool: {str(e)}",
+                                "is_error": True,
+                            })
+
+                # Add assistant's response and tool results to conversation
+                conversation_messages.append({
+                    "role": "assistant",
+                    "content": response.content,
+                })
+                conversation_messages.append({
+                    "role": "user",
+                    "content": tool_results,
+                })
+            else:
+                # No more tool calls, return final response
+                final_text = ""
+                for content_block in response.content:
+                    if hasattr(content_block, "text"):
+                        final_text += content_block.text
+
+                return {
+                    "content": final_text,
+                    "tool_calls": tool_calls_made,
+                    "stop_reason": response.stop_reason,
+                }
+
+        # Max iterations reached
+        return {
+            "content": "Maximum tool use iterations reached",
+            "tool_calls": tool_calls_made,
+            "stop_reason": "max_iterations",
+        }
 
     async def analyze_requirement(self, request: str) -> str:
         """Analyze a coding requirement.
